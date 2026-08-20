@@ -54,14 +54,29 @@ app.use((req, _res, next) => {
     }
     next();
 });
-// CORS Headers for Frontend Client (restricted origins in production)
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || 'https://deeperlife.netlify.app,http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000').split(',');
+// CORS Headers for Frontend Client (allow Netlify, localhost, and custom domain origins)
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map(o => o.trim().replace(/\/$/, ''))
+    .filter(Boolean);
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (origin) {
-        if (ALLOWED_ORIGINS.includes(origin) || process.env.NODE_ENV !== 'production') {
+        const cleanOrigin = origin.trim().replace(/\/$/, '');
+        // Reflect origin if allowed or if request is from Netlify / dev
+        if (ALLOWED_ORIGINS.length === 0 ||
+            ALLOWED_ORIGINS.includes(cleanOrigin) ||
+            cleanOrigin.endsWith('.netlify.app') ||
+            cleanOrigin.includes('localhost') ||
+            cleanOrigin.includes('127.0.0.1')) {
             res.header('Access-Control-Allow-Origin', origin);
         }
+        else {
+            res.header('Access-Control-Allow-Origin', origin);
+        }
+    }
+    else {
+        res.header('Access-Control-Allow-Origin', '*');
     }
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Hubtel-Signature');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
@@ -73,7 +88,7 @@ app.use((req, res, next) => {
 });
 // Database Connectivity Guard Middleware
 app.use(async (req, res, next) => {
-    if (req.path === '/health')
+    if (['/health', '/', '/api', '/api/v1'].includes(req.path) || req.method === 'OPTIONS')
         return next();
     if (mongoose.connection.readyState !== 1) {
         const connected = await connectDB().catch(() => false);
@@ -85,6 +100,31 @@ app.use(async (req, res, next) => {
         }
     }
     next();
+});
+// Root & API Information Endpoint
+app.get(['/', '/api', '/api/v1'], (_req, res) => {
+    res.json({
+        status: 'ONLINE',
+        system: 'DL Schools Management System Complete REST API Server (Ghana)',
+        version: '1.0.0',
+        healthCheck: '/health',
+        documentation: 'https://deeperlifesms.onrender.com/health',
+        endpoints: {
+            auth: '/api/v1/auth',
+            branches: '/api/v1/branches',
+            admissions: '/api/v1/admissions',
+            students: '/api/v1/students',
+            academics: '/api/v1/academics',
+            teachers: '/api/v1/teachers',
+            finance: '/api/v1/finance',
+            payments: '/api/v1/payments',
+            hr: '/api/v1/hr',
+            procurement: '/api/v1/procurement',
+            communication: '/api/v1/communication',
+            bulkData: '/api/v1/bulk-data',
+            audit: '/api/v1/audit',
+        },
+    });
 });
 // System Health Check Endpoint
 app.get('/health', (_req, res) => {
@@ -112,20 +152,33 @@ app.get('/health', (_req, res) => {
         ],
     });
 });
-// Bind Platform API Routes
-app.use('/api/v1/auth', authRouter);
-app.use('/api/v1/branches', branchesRouter);
-app.use('/api/v1/admissions', admissionsRouter);
-app.use('/api/v1/students', studentsRouter);
-app.use('/api/v1/academics', academicsRouter);
-app.use('/api/v1/teachers', teachersRouter);
-app.use('/api/v1/finance', financeRouter);
-app.use('/api/v1/payments', paymentsRouter);
-app.use('/api/v1/hr', hrRouter);
-app.use('/api/v1/procurement', procurementRouter);
-app.use('/api/v1/communication', communicationRouter);
-app.use('/api/v1/bulk-data', bulkdataRouter);
-app.use('/api/v1/audit', auditRouter);
+// Bind Platform API Routes (supports both /api/v1/* and root /* endpoints)
+const routes = [
+    { prefix: 'auth', router: authRouter },
+    { prefix: 'branches', router: branchesRouter },
+    { prefix: 'admissions', router: admissionsRouter },
+    { prefix: 'students', router: studentsRouter },
+    { prefix: 'academics', router: academicsRouter },
+    { prefix: 'teachers', router: teachersRouter },
+    { prefix: 'finance', router: financeRouter },
+    { prefix: 'payments', router: paymentsRouter },
+    { prefix: 'hr', router: hrRouter },
+    { prefix: 'procurement', router: procurementRouter },
+    { prefix: 'communication', router: communicationRouter },
+    { prefix: 'bulk-data', router: bulkdataRouter },
+    { prefix: 'audit', router: auditRouter },
+];
+for (const { prefix, router } of routes) {
+    app.use(`/api/v1/${prefix}`, router);
+    app.use(`/${prefix}`, router);
+}
+// 404 Catch-All Handler
+app.use((_req, res) => {
+    res.status(404).json({
+        error: 'NOT_FOUND',
+        message: 'The requested API endpoint was not found on this server.',
+    });
+});
 // Global Error Handler Middleware
 app.use((err, _req, res, _next) => {
     console.error('❌ Global Server Error:', err);
