@@ -54,7 +54,7 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 });
 
 // CORS Headers for Frontend Client (restricted origins in production)
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000').split(',');
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || 'https://deeperlife.netlify.app,http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000').split(',');
 
 app.use((req: Request, res: Response, next: NextFunction) => {
     const origin = req.headers.origin;
