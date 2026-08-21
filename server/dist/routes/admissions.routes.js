@@ -71,19 +71,35 @@ admissionsRouter.post('/', authenticateToken, handleNewSubmission);
 const handleApprove = async (req, res) => {
     const generatedAdmissionNo = `DLS-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     const id = String(req.params.id);
+    const { applicantName: bodyApplicantName, parentPhone: bodyParentPhone } = req.body || {};
     try {
-        const updated = await AdmissionModel.findOneAndUpdate({ $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { applicationNo: id }] }, { status: 'APPROVED' }, { returnDocument: 'after' }).lean();
+        let updated = await AdmissionModel.findOneAndUpdate({
+            $or: [
+                { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null },
+                { applicationNo: id },
+                { applicationNo: new RegExp(id.replace(/^DLS-/, ''), 'i') }
+            ]
+        }, { status: 'APPROVED' }, { returnDocument: 'after' }).lean();
+        // Fallback: If not found by ID or applicationNo, check by body fields or applicant details
+        if (!updated && (bodyApplicantName || bodyParentPhone)) {
+            updated = await AdmissionModel.findOneAndUpdate({
+                $or: [
+                    { applicantName: bodyApplicantName },
+                    { parentPhone: bodyParentPhone }
+                ]
+            }, { status: 'APPROVED' }, { returnDocument: 'after' }).lean();
+        }
         if (!updated) {
             return res.status(404).json({ error: 'NOT_FOUND', message: 'Application not found.' });
         }
         // Automatic creation of Student record in database
-        const applicantName = updated.applicantName || 'Admitted Student';
+        const applicantName = updated.applicantName || bodyApplicantName || 'Admitted Student';
         const gender = updated.gender || 'Male';
         const dateOfBirth = updated.dateOfBirth ? new Date(updated.dateOfBirth) : new Date('2016-01-01');
         const level = updated.applyingLevel || updated.intendedLevel || updated.level || 'Primary 1';
         const branchId = updated.targetBranchId || updated.branchId || 'br-accra';
         const parentName = updated.parentName || 'Guardian';
-        const parentPhone = updated.parentPhone || '';
+        const parentPhone = updated.parentPhone || bodyParentPhone || '';
         const parentEmail = updated.parentEmail || '';
         const photoUrl = updated.photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150';
         let branchName = 'Accra Central Campus (Dansoman)';
@@ -115,6 +131,7 @@ const handleApprove = async (req, res) => {
                 guardianName: parentName,
                 guardianPhone: parentPhone,
                 guardianEmail: parentEmail,
+                admissionDate: new Date(),
             });
         }
         const studentObj = typeof studentDoc.toObject === 'function' ? studentDoc.toObject() : studentDoc;

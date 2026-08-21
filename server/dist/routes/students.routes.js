@@ -14,6 +14,8 @@ function fmt(doc) {
     return {
         ...obj,
         id: obj._id?.toString() || obj.admissionNo || obj.id,
+        photoUrl: obj.photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150',
+        admissionDate: obj.admissionDate ? new Date(obj.admissionDate).toISOString().split('T')[0] : (obj.createdAt ? new Date(obj.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
         parentName: pName,
         parentPhone: pPhone,
         parentEmail: pEmail,
