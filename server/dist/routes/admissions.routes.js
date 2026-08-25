@@ -77,8 +77,8 @@ const handleNewSubmission = async (req, res) => {
         return res.status(500).json({ error: 'DB_ERROR', message: err.message });
     }
 };
-admissionsRouter.post('/submit', authenticateToken, handleNewSubmission);
-admissionsRouter.post('/', authenticateToken, handleNewSubmission);
+admissionsRouter.post('/submit', handleNewSubmission);
+admissionsRouter.post('/', handleNewSubmission);
 // Approve Application Handler - Automatically Adds Student, Invoice, & Parent User
 const handleApprove = async (req, res) => {
     const generatedAdmissionNo = `DLS-2026-${Math.floor(1000 + Math.random() * 9000)}`;
