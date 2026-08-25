@@ -14,12 +14,13 @@ import { procurementRouter } from './routes/procurement.routes.js';
 import { communicationRouter } from './routes/communication.routes.js';
 import { bulkdataRouter } from './routes/bulkdata.routes.js';
 import { auditRouter } from './routes/audit.routes.js';
+import { uploadRouter } from './routes/upload.routes.js';
 import { rateLimiter } from './middleware/auth.js';
 const app = express();
 const PORT = process.env.PORT || 5000;
 // Security & Parsing Middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(rateLimiter);
 // NoSQL Injection Sanitization — strip MongoDB operators from user input
 function sanitizeValue(val) {
@@ -167,6 +168,7 @@ const routes = [
     { prefix: 'communication', router: communicationRouter },
     { prefix: 'bulk-data', router: bulkdataRouter },
     { prefix: 'audit', router: auditRouter },
+    { prefix: 'upload', router: uploadRouter },
 ];
 for (const { prefix, router } of routes) {
     app.use(`/api/v1/${prefix}`, router);

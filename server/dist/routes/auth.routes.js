@@ -1,7 +1,8 @@
 import { Router } from 'express';
-import { hashPassword, verifyPassword, generateTokens, generateOtpCode } from '../utils/security.js';
+import { hashPassword, verifyPassword, generateTokens, verifyAccessToken, generateOtpCode } from '../utils/security.js';
 import { redis } from '../lib/redis.js';
 import { UserModel } from '../models/User.js';
+import { uploadAvatarToCloudinary } from '../lib/cloudinary.js';
 export const authRouter = Router();
 authRouter.post('/login', async (req, res) => {
     const { email, password } = req.body;
@@ -98,6 +99,7 @@ authRouter.post('/login', async (req, res) => {
                 email: user.email,
                 fullName: user.fullName,
                 role: user.role,
+                avatarUrl: user.avatarUrl || '',
                 branchId: user.branchId || 'ALL',
             },
             ...tokens,
@@ -250,5 +252,52 @@ authRouter.post('/refresh', async (req, res) => {
     }
     catch (err) {
         return res.status(403).json({ error: 'FORBIDDEN', message: 'Invalid refresh token.' });
+    }
+});
+// PUT /api/v1/auth/profile - Update logged-in user profile details (avatarUrl, phone, fullName)
+authRouter.post('/profile', verifyAccessToken, async (req, res) => {
+    const userId = req.user?.userId;
+    const { avatarUrl, fullName, phone } = req.body;
+    if (!userId) {
+        return res.status(401).json({ error: 'UNAUTHORIZED', message: 'Authentication required.' });
+    }
+    try {
+        const updateData = {};
+        if (avatarUrl !== undefined) {
+            let finalAvatarUrl = avatarUrl;
+            if (finalAvatarUrl && finalAvatarUrl.startsWith('data:image/')) {
+                try {
+                    const uploadRes = await uploadAvatarToCloudinary(finalAvatarUrl);
+                    finalAvatarUrl = uploadRes.url;
+                }
+                catch (uploadErr) {
+                    console.error('Failed to upload base64 avatar to Cloudinary in profile update:', uploadErr);
+                }
+            }
+            updateData.avatarUrl = finalAvatarUrl;
+        }
+        if (fullName)
+            updateData.fullName = fullName;
+        if (phone !== undefined)
+            updateData.phone = phone;
+        const updated = await UserModel.findByIdAndUpdate(userId, updateData, { new: true }).lean();
+        if (!updated) {
+            return res.status(404).json({ error: 'NOT_FOUND', message: 'User not found.' });
+        }
+        return res.json({
+            message: 'Profile updated successfully.',
+            user: {
+                id: updated._id.toString(),
+                email: updated.email,
+                fullName: updated.fullName,
+                role: updated.role,
+                avatarUrl: updated.avatarUrl || '',
+                phone: updated.phone || '',
+                branchId: updated.branchId || 'ALL',
+            },
+        });
+    }
+    catch (err) {
+        return res.status(500).json({ error: 'SERVER_ERROR', message: err.message });
     }
 });

@@ -6,6 +6,7 @@ import { BranchModel } from '../models/Branch.js';
 import { FeeInvoiceModel } from '../models/FeeInvoice.js';
 import { UserModel } from '../models/User.js';
 import { hashPassword } from '../utils/security.js';
+import { uploadPassportToCloudinary } from '../lib/cloudinary.js';
 export const admissionsRouter = Router();
 function fmt(doc) {
     if (!doc)
@@ -38,6 +39,16 @@ const handleNewSubmission = async (req, res) => {
     if (!applicantName || !finalLevel || !parentPhone) {
         return res.status(400).json({ error: 'BAD_REQUEST', message: 'Applicant name, level, and parent phone are required.' });
     }
+    let finalPhotoUrl = photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150';
+    if (finalPhotoUrl && finalPhotoUrl.startsWith('data:image/')) {
+        try {
+            const uploadRes = await uploadPassportToCloudinary(finalPhotoUrl);
+            finalPhotoUrl = uploadRes.url;
+        }
+        catch (uploadErr) {
+            console.error('Failed to upload base64 photo to Cloudinary in admissions submission:', uploadErr);
+        }
+    }
     try {
         const applicationNo = `ADM-2026-${Math.floor(100 + Math.random() * 900)}`;
         const newApplication = await AdmissionModel.create({
@@ -50,7 +61,7 @@ const handleNewSubmission = async (req, res) => {
             parentName: parentName || 'Parent',
             parentPhone,
             parentEmail: parentEmail || '',
-            photoUrl: photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150',
+            photoUrl: finalPhotoUrl,
             status: 'SUBMITTED',
             interviewDate: null,
             submittedAt: new Date(),
@@ -133,6 +144,15 @@ const handleApprove = async (req, res) => {
                 guardianEmail: parentEmail,
                 admissionDate: new Date(),
             });
+        }
+        else {
+            studentDoc = await StudentModel.findByIdAndUpdate(studentDoc._id, {
+                photoUrl: photoUrl || studentDoc.photoUrl,
+                status: 'ACTIVE',
+                branchId: branchId || studentDoc.branchId,
+                branchName: branchName || studentDoc.branchName,
+                level: level || studentDoc.level,
+            }, { returnDocument: 'after' }).lean();
         }
         const studentObj = typeof studentDoc.toObject === 'function' ? studentDoc.toObject() : studentDoc;
         const studentIdStr = studentObj._id?.toString() || generatedAdmissionNo;
