@@ -64,9 +64,10 @@ app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (origin) {
         const cleanOrigin = origin.trim().replace(/\/$/, '');
-        // Reflect origin if allowed or if request is from Netlify / dev
+        // Reflect origin if allowed or if request is from Vercel / Netlify / dev
         if (ALLOWED_ORIGINS.length === 0 ||
             ALLOWED_ORIGINS.includes(cleanOrigin) ||
+            cleanOrigin.endsWith('.vercel.app') ||
             cleanOrigin.endsWith('.netlify.app') ||
             cleanOrigin.includes('localhost') ||
             cleanOrigin.includes('127.0.0.1')) {
