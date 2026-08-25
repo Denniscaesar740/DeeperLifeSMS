@@ -17,6 +17,7 @@ function fmt(doc: any) {
         ...obj,
         id: obj._id?.toString() || obj.admissionNo || obj.id,
         photoUrl: obj.photoUrl || '',
+        dateOfBirth: obj.dateOfBirth ? (typeof obj.dateOfBirth === 'string' ? obj.dateOfBirth.split('T')[0] : new Date(obj.dateOfBirth).toISOString().split('T')[0]) : '',
         admissionDate: obj.admissionDate ? new Date(obj.admissionDate).toISOString().split('T')[0] : (obj.createdAt ? new Date(obj.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
         parentName: pName,
         parentPhone: pPhone,
