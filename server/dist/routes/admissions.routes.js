@@ -37,10 +37,13 @@ const handleNewSubmission = async (req, res) => {
     const { applicantName, gender, dateOfBirth, applyingLevel, intendedLevel, level, targetBranchId, branchId, parentName, parentPhone, parentEmail, photoUrl } = req.body;
     const finalLevel = applyingLevel || intendedLevel || level;
     const finalBranchId = targetBranchId || branchId || 'br-accra';
-    if (!applicantName || !finalLevel || !parentPhone) {
-        return res.status(400).json({ error: 'BAD_REQUEST', message: 'Applicant name, level, and parent phone are required.' });
+    let finalPhotoUrl = photoUrl ? String(photoUrl).trim() : '';
+    if (!applicantName || !finalLevel || !parentPhone || !finalPhotoUrl) {
+        return res.status(400).json({
+            error: 'BAD_REQUEST',
+            message: 'Applicant name, level, parent phone, and student passport photo (photoUrl) are required for admission application.'
+        });
     }
-    let finalPhotoUrl = photoUrl || '';
     if (finalPhotoUrl && finalPhotoUrl.startsWith('data:image/')) {
         try {
             const uploadRes = await uploadPassportToCloudinary(finalPhotoUrl);
