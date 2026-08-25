@@ -8,11 +8,11 @@ const StudentSchema = new Schema({
     classStream: { type: String, default: 'Gold' },
     branchId: { type: String, required: true },
     branchName: { type: String, default: '' },
-    photoUrl: { type: String, default: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150' },
+    photoUrl: { type: String, default: '' },
     status: { type: String, default: 'ACTIVE' },
     guardianName: { type: String, required: true },
     guardianPhone: { type: String, required: true },
     guardianEmail: { type: String, default: '' },
     admissionDate: { type: Date, default: Date.now },
-}, { timestamps: true, strict: false });
+}, { timestamps: true, strict: false, minimize: false });
 export const StudentModel = mongoose.models.Student || mongoose.model('Student', StudentSchema);

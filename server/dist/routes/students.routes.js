@@ -15,7 +15,7 @@ function fmt(doc) {
     return {
         ...obj,
         id: obj._id?.toString() || obj.admissionNo || obj.id,
-        photoUrl: obj.photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150',
+        photoUrl: obj.photoUrl || '',
         admissionDate: obj.admissionDate ? new Date(obj.admissionDate).toISOString().split('T')[0] : (obj.createdAt ? new Date(obj.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
         parentName: pName,
         parentPhone: pPhone,
@@ -51,7 +51,7 @@ studentsRouter.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'BRANC
     if (!fullName || !level || !branchId || !finalParentPhone) {
         return res.status(400).json({ error: 'BAD_REQUEST', message: 'Missing required student fields (fullName, level, branchId, parentPhone).' });
     }
-    let finalPhotoUrl = photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150';
+    let finalPhotoUrl = photoUrl || '';
     if (finalPhotoUrl && finalPhotoUrl.startsWith('data:image/')) {
         try {
             const uploadRes = await uploadPassportToCloudinary(finalPhotoUrl);

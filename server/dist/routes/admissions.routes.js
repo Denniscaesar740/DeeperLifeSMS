@@ -17,7 +17,7 @@ function fmt(doc) {
         id: obj._id?.toString() || obj.applicationNo,
         intendedLevel: obj.applyingLevel || obj.intendedLevel || obj.level || '',
         branchId: obj.targetBranchId || obj.branchId || 'br-accra',
-        photoUrl: obj.photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150',
+        photoUrl: obj.photoUrl || '',
         dateSubmitted: obj.submittedAt ? new Date(obj.submittedAt).toISOString().split('T')[0] : (obj.createdAt ? new Date(obj.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
     };
 }
@@ -40,7 +40,7 @@ const handleNewSubmission = async (req, res) => {
     if (!applicantName || !finalLevel || !parentPhone) {
         return res.status(400).json({ error: 'BAD_REQUEST', message: 'Applicant name, level, and parent phone are required.' });
     }
-    let finalPhotoUrl = photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150';
+    let finalPhotoUrl = photoUrl || '';
     if (finalPhotoUrl && finalPhotoUrl.startsWith('data:image/')) {
         try {
             const uploadRes = await uploadPassportToCloudinary(finalPhotoUrl);
@@ -113,7 +113,7 @@ const handleApprove = async (req, res) => {
         const parentName = updated.parentName || 'Guardian';
         const parentPhone = updated.parentPhone || bodyParentPhone || '';
         const parentEmail = updated.parentEmail || '';
-        const photoUrl = updated.photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150';
+        const photoUrl = updated.photoUrl || '';
         let branchName = 'Accra Central Campus (Dansoman)';
         try {
             const branch = await BranchModel.findOne({ $or: [{ code: branchId }, { _id: branchId.match(/^[0-9a-fA-F]{24}$/) ? branchId : null }] }).lean();

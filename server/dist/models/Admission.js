@@ -9,9 +9,9 @@ const AdmissionSchema = new Schema({
     parentName: { type: String, required: true },
     parentPhone: { type: String, required: true },
     parentEmail: { type: String, default: '' },
-    photoUrl: { type: String, default: 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150' },
+    photoUrl: { type: String, default: '' },
     status: { type: String, default: 'SUBMITTED' },
     interviewDate: { type: Date, default: null },
     submittedAt: { type: Date, default: Date.now },
-}, { timestamps: true, strict: false });
+}, { timestamps: true, strict: false, minimize: false });
 export const AdmissionModel = mongoose.models.Admission || mongoose.model('Admission', AdmissionSchema);
