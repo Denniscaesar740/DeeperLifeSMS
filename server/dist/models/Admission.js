@@ -13,5 +13,5 @@ const AdmissionSchema = new Schema({
     status: { type: String, default: 'SUBMITTED' },
     interviewDate: { type: Date, default: null },
     submittedAt: { type: Date, default: Date.now },
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 export const AdmissionModel = mongoose.models.Admission || mongoose.model('Admission', AdmissionSchema);

@@ -14,5 +14,5 @@ const StudentSchema = new Schema({
     guardianPhone: { type: String, required: true },
     guardianEmail: { type: String, default: '' },
     admissionDate: { type: Date, default: Date.now },
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 export const StudentModel = mongoose.models.Student || mongoose.model('Student', StudentSchema);

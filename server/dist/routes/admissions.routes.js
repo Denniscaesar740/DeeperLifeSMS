@@ -17,6 +17,7 @@ function fmt(doc) {
         id: obj._id?.toString() || obj.applicationNo,
         intendedLevel: obj.applyingLevel || obj.intendedLevel || obj.level || '',
         branchId: obj.targetBranchId || obj.branchId || 'br-accra',
+        photoUrl: obj.photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=150',
         dateSubmitted: obj.submittedAt ? new Date(obj.submittedAt).toISOString().split('T')[0] : (obj.createdAt ? new Date(obj.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
     };
 }
