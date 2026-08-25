@@ -7,6 +7,7 @@ export interface IUser extends Document {
     fullName: string;
     role: string;
     phone?: string;
+    avatarUrl?: string;
     branchId?: string;
     twoFactorEnabled: boolean;
     isActive: boolean;
@@ -20,6 +21,7 @@ const UserSchema: Schema = new Schema(
         fullName: { type: String, required: true },
         role: { type: String, required: true, enum: ['SUPER_ADMIN', 'BRANCH_ADMIN', 'HEADTEACHER', 'ACCOUNTANT', 'CASHIER', 'ADMISSIONS_OFFICER', 'TEACHER', 'PARENT', 'STUDENT', 'AUDITOR'] },
         phone: { type: String, default: '' },
+        avatarUrl: { type: String, default: '' },
         branchId: { type: String, default: 'br-accra' },
         twoFactorEnabled: { type: Boolean, default: false },
         isActive: { type: Boolean, default: true },

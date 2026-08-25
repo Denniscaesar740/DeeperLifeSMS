@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 import { StudentModel } from '../models/Student.js';
 import { BranchModel } from '../models/Branch.js';
+import { uploadPassportToCloudinary } from '../lib/cloudinary.js';
 
 export const studentsRouter = Router();
 
@@ -15,6 +16,8 @@ function fmt(doc: any) {
     return {
         ...obj,
         id: obj._id?.toString() || obj.admissionNo || obj.id,
+        photoUrl: obj.photoUrl || '',
+        admissionDate: obj.admissionDate ? new Date(obj.admissionDate).toISOString().split('T')[0] : (obj.createdAt ? new Date(obj.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
         parentName: pName,
         parentPhone: pPhone,
         parentEmail: pEmail,
@@ -54,7 +57,8 @@ studentsRouter.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'BRANC
         guardianPhone,
         parentEmail,
         guardianEmail,
-        dateOfBirth
+        dateOfBirth,
+        photoUrl,
     } = req.body;
 
     const finalParentName = parentName || guardianName || 'Guardian';
@@ -63,6 +67,16 @@ studentsRouter.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'BRANC
 
     if (!fullName || !level || !branchId || !finalParentPhone) {
         return res.status(400).json({ error: 'BAD_REQUEST', message: 'Missing required student fields (fullName, level, branchId, parentPhone).' });
+    }
+
+    let finalPhotoUrl = photoUrl || '';
+    if (finalPhotoUrl && finalPhotoUrl.startsWith('data:image/')) {
+        try {
+            const uploadRes = await uploadPassportToCloudinary(finalPhotoUrl);
+            finalPhotoUrl = uploadRes.url;
+        } catch (uploadErr) {
+            console.error('Failed to upload base64 student photo to Cloudinary:', uploadErr);
+        }
     }
 
     try {
@@ -82,6 +96,7 @@ studentsRouter.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'BRANC
             classStream: classStream || 'Gold',
             branchId,
             branchName,
+            photoUrl: finalPhotoUrl,
             guardianName: finalParentName,
             guardianPhone: finalParentPhone,
             guardianEmail: finalParentEmail,
@@ -112,10 +127,21 @@ studentsRouter.get('/:id', authenticateToken, async (req: Request, res: Response
 // PUT /api/v1/students/:id - Update student details
 studentsRouter.put('/:id', authenticateToken, authorizeRoles('SUPER_ADMIN', 'BRANCH_ADMIN'), async (req: Request, res: Response) => {
     const studentId = String(req.params.id);
+    const updateData = { ...req.body };
+
+    if (updateData.photoUrl && updateData.photoUrl.startsWith('data:image/')) {
+        try {
+            const uploadRes = await uploadPassportToCloudinary(updateData.photoUrl);
+            updateData.photoUrl = uploadRes.url;
+        } catch (uploadErr) {
+            console.error('Failed to upload updated base64 student photo to Cloudinary:', uploadErr);
+        }
+    }
+
     try {
         const updated = await StudentModel.findOneAndUpdate(
             { $or: [{ _id: studentId.match(/^[0-9a-fA-F]{24}$/) ? studentId : null }, { admissionNo: studentId }] },
-            req.body,
+            updateData,
             { returnDocument: 'after' }
         ).lean();
         if (!updated) {
