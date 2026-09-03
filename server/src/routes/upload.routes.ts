@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { authenticateToken } from '../middleware/auth.js';
 import { uploadToCloudinary, uploadAvatarToCloudinary, uploadPassportToCloudinary, isCloudinaryConfigured } from '../lib/cloudinary.js';
 
 export const uploadRouter = Router();
@@ -17,7 +18,7 @@ uploadRouter.get('/status', (_req: Request, res: Response) => {
 });
 
 // POST /api/v1/upload/image - Upload generic image to Cloudinary
-uploadRouter.post('/image', async (req: Request, res: Response) => {
+uploadRouter.post('/image', authenticateToken, async (req: Request, res: Response) => {
     try {
         const { image, file, folder } = req.body;
         const targetImage = image || file;
@@ -41,7 +42,7 @@ uploadRouter.post('/image', async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/upload/avatar - Upload user/staff avatar photo to Cloudinary
-uploadRouter.post('/avatar', async (req: Request, res: Response) => {
+uploadRouter.post('/avatar', authenticateToken, async (req: Request, res: Response) => {
     try {
         const { image, file } = req.body;
         const targetImage = image || file;
@@ -64,7 +65,7 @@ uploadRouter.post('/avatar', async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/upload/passport - Upload student/admission passport photo to Cloudinary
-uploadRouter.post('/passport', async (req: Request, res: Response) => {
+uploadRouter.post('/passport', authenticateToken, async (req: Request, res: Response) => {
     try {
         const { image, file } = req.body;
         const targetImage = image || file;

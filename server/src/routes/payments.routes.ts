@@ -64,6 +64,14 @@ paymentsRouter.post('/webhook', async (req: Request, res: Response) => {
 
     const isSignatureValid = verifyHubtelSignature(rawPayload, signatureHeader, HUBTEL_SECRET);
 
+    if (!isSignatureValid) {
+        return res.status(403).json({
+            error: 'FORBIDDEN',
+            message: 'Invalid webhook signature. Payment rejected for security reasons.',
+            signatureVerified: false,
+        });
+    }
+
     const { referenceNo, status, providerRef } = req.body;
     const newStatus = status === 'SUCCESSFUL' || status === 'SUCCESS' ? 'SUCCESS' : 'FAILED';
 

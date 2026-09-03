@@ -24,9 +24,15 @@ function fmt(doc: any) {
 }
 
 // GET /api/v1/admissions - List all admission applications
-admissionsRouter.get('/', authenticateToken, async (_req: Request, res: Response) => {
+admissionsRouter.get('/', authenticateToken, async (req: Request, res: Response) => {
     try {
-        const apps = await AdmissionModel.find().sort({ createdAt: -1 }).lean();
+        const query: any = {};
+        const authUser = (req as any).user;
+        if (authUser && authUser.role !== 'SUPER_ADMIN' && authUser.role !== 'AUDITOR' && authUser.branchId && authUser.branchId !== 'ALL') {
+            query.targetBranchId = authUser.branchId;
+        }
+
+        const apps = await AdmissionModel.find(query).sort({ createdAt: -1 }).lean();
         const formatted = apps.map(fmt);
         return res.json({ count: formatted.length, applications: formatted });
     } catch (err: any) {

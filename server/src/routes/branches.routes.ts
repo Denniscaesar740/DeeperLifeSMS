@@ -10,9 +10,16 @@ function fmt(doc: any) {
 }
 
 // 1. GET /api/v1/branches - List all school branches (Public & Authenticated)
-branchesRouter.get('/', async (_req: Request, res: Response) => {
+branchesRouter.get('/', async (req: Request, res: Response) => {
     try {
-        const branches = await BranchModel.find().lean();
+        const authUser = (req as any).user;
+        const query: any = {};
+
+        if (authUser && authUser.role !== 'SUPER_ADMIN' && authUser.role !== 'AUDITOR' && authUser.branchId && authUser.branchId !== 'ALL') {
+            query.$or = [{ code: authUser.branchId }, { _id: authUser.branchId.match(/^[0-9a-fA-F]{24}$/) ? authUser.branchId : null }];
+        }
+
+        const branches = await BranchModel.find(query).lean();
         const formatted = branches.map(fmt);
         return res.json({ totalBranches: formatted.length, branches: formatted });
     } catch (err: any) {

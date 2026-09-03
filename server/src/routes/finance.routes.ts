@@ -15,6 +15,11 @@ financeRouter.get('/invoices', authenticateToken, async (req: Request, res: Resp
     const { status, studentId } = req.query;
     try {
         const query: any = {};
+        const authUser = (req as any).user;
+
+        if (authUser && authUser.role !== 'SUPER_ADMIN' && authUser.role !== 'AUDITOR' && authUser.branchId && authUser.branchId !== 'ALL') {
+            query.branchId = authUser.branchId;
+        }
         if (status) query.status = status;
         if (studentId) query.studentId = studentId;
 

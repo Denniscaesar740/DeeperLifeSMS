@@ -11,6 +11,8 @@ export interface IUser extends Document {
     branchId?: string;
     twoFactorEnabled: boolean;
     isActive: boolean;
+    classesAssigned?: string[];
+    subjectsAssigned?: string[];
 }
 
 const UserSchema: Schema = new Schema(
@@ -25,6 +27,8 @@ const UserSchema: Schema = new Schema(
         branchId: { type: String, default: 'br-accra' },
         twoFactorEnabled: { type: Boolean, default: false },
         isActive: { type: Boolean, default: true },
+        classesAssigned: { type: [String], default: [] },
+        subjectsAssigned: { type: [String], default: [] },
     },
     { timestamps: true }
 );

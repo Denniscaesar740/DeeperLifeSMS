@@ -33,7 +33,14 @@ studentsRouter.get('/', authenticateToken, async (req: Request, res: Response) =
     const { branchId, level } = req.query;
     try {
         const query: any = {};
-        if (branchId && branchId !== 'ALL') query.branchId = branchId;
+        const authUser = (req as any).user;
+
+        // Non-global admins can only query students in their registered branch
+        if (authUser && authUser.role !== 'SUPER_ADMIN' && authUser.role !== 'AUDITOR' && authUser.branchId && authUser.branchId !== 'ALL') {
+            query.branchId = authUser.branchId;
+        } else if (branchId && branchId !== 'ALL') {
+            query.branchId = branchId;
+        }
         if (level && level !== 'ALL') query.level = level;
 
         const dbStudents = await StudentModel.find(query).sort({ createdAt: -1 }).lean();

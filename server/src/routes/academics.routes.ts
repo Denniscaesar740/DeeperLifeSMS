@@ -48,6 +48,17 @@ academicsRouter.post('/scores', authenticateToken, authorizeRoles('SUPER_ADMIN',
         return res.status(400).json({ error: 'BAD_REQUEST', message: 'Missing studentId, subject, classScore, or examScore.' });
     }
 
+    const authUser = (req as any).user;
+    if (authUser && authUser.role === 'TEACHER') {
+        const assignedSubjects = authUser.subjectsAssigned || [];
+        if (assignedSubjects.length > 0 && !assignedSubjects.includes(subject)) {
+            return res.status(403).json({
+                error: 'FORBIDDEN',
+                message: `Access denied. You are only authorized to grade subjects assigned to you (${assignedSubjects.join(', ')}).`,
+            });
+        }
+    }
+
     const total = Number(classScore) + Number(examScore);
     const { grade, remarks: autoRemark } = calculateGrade(total);
 
@@ -57,7 +68,23 @@ academicsRouter.post('/scores', authenticateToken, authorizeRoles('SUPER_ADMIN',
             const st = await StudentModel.findOne({
                 $or: [{ _id: String(studentId).match(/^[0-9a-fA-F]{24}$/) ? studentId : null }, { admissionNo: studentId }]
             });
-            if (st) studentName = st.fullName;
+            if (st) {
+                studentName = st.fullName;
+                if (authUser && authUser.role === 'TEACHER') {
+                    const assignedClasses = authUser.classesAssigned || [];
+                    if (assignedClasses.length > 0) {
+                        const isAssigned = assignedClasses.some((ac: string) =>
+                            (st.classStream && st.classStream.includes(ac)) || (st.level && st.level.includes(ac)) || (st.level && ac.includes(st.level))
+                        );
+                        if (!isAssigned) {
+                            return res.status(403).json({
+                                error: 'FORBIDDEN',
+                                message: `Access denied. Student ${st.fullName} (${st.level}) is not in your assigned class (${assignedClasses.join(', ')}).`,
+                            });
+                        }
+                    }
+                }
+            }
         } catch { }
 
         const record = await AssessmentModel.create({
@@ -71,7 +98,7 @@ academicsRouter.post('/scores', authenticateToken, authorizeRoles('SUPER_ADMIN',
             totalScore: total,
             grade,
             remarks: remarks || autoRemark,
-            recordedBy: (req as any).user?.fullName || 'Teacher',
+            recordedBy: authUser?.fullName || 'Teacher',
         });
         return res.status(201).json({ message: 'Score saved successfully.', assessment: fmt(record.toObject()) });
     } catch (err: any) {

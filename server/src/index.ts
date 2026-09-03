@@ -21,8 +21,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Security & Parsing Middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 app.use(rateLimiter);
 
 // NoSQL Injection Sanitization — strip MongoDB operators from user input
@@ -74,11 +74,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
             cleanOrigin.includes('127.0.0.1')
         ) {
             res.header('Access-Control-Allow-Origin', origin);
-        } else {
-            res.header('Access-Control-Allow-Origin', origin);
         }
-    } else {
-        res.header('Access-Control-Allow-Origin', '*');
+        // Disallowed origins: no CORS header set — browser will block the request
     }
 
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Hubtel-Signature');
@@ -110,25 +107,9 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
 app.get(['/', '/api', '/api/v1'], (_req: Request, res: Response) => {
     res.json({
         status: 'ONLINE',
-        system: 'DL Schools Management System Complete REST API Server (Ghana)',
+        system: 'DL Schools Management System REST API (Ghana)',
         version: '1.0.0',
         healthCheck: '/health',
-        documentation: 'https://deeperlifesms.onrender.com/health',
-        endpoints: {
-            auth: '/api/v1/auth',
-            branches: '/api/v1/branches',
-            admissions: '/api/v1/admissions',
-            students: '/api/v1/students',
-            academics: '/api/v1/academics',
-            teachers: '/api/v1/teachers',
-            finance: '/api/v1/finance',
-            payments: '/api/v1/payments',
-            hr: '/api/v1/hr',
-            procurement: '/api/v1/procurement',
-            communication: '/api/v1/communication',
-            bulkData: '/api/v1/bulk-data',
-            audit: '/api/v1/audit',
-        },
     });
 });
 
@@ -179,14 +160,37 @@ const routes = [
 
 for (const { prefix, router } of routes) {
     app.use(`/api/v1/${prefix}`, router);
-    app.use(`/${prefix}`, router);
 }
 
-// 404 Catch-All Handler
-app.use((_req: Request, res: Response) => {
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distPath = path.resolve(__dirname, '../../dist');
+
+// Serve static frontend assets if built
+app.use(express.static(distPath));
+
+// API 404 Handler for missing /api routes
+app.use('/api/*', (_req: Request, res: Response) => {
     res.status(404).json({
         error: 'NOT_FOUND',
         message: 'The requested API endpoint was not found on this server.',
+    });
+});
+
+// SPA History API Catch-All Fallback (Serves index.html for routes like /admissions, /dashboard, etc.)
+app.get('*', (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api')) return next();
+    const indexPath = path.join(distPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+        if (err) {
+            res.status(404).json({
+                error: 'NOT_FOUND',
+                message: 'Frontend client index.html not found. Please build frontend app with `npm run build`.',
+            });
+        }
     });
 });
 

@@ -39,7 +39,7 @@ export function verifyPassword(password: string, storedHash: string): boolean {
 export function generateTokens(payload: JwtPayload) {
     const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
 
-    const accessTokenExpiry = Math.floor(Date.now() / 1000) + 24 * 60 * 60; // 24 Hours
+    const accessTokenExpiry = Math.floor(Date.now() / 1000) + 60 * 60; // 1 Hour
     const accessPayload = Buffer.from(JSON.stringify({ ...payload, exp: accessTokenExpiry })).toString('base64url');
     const accessSignature = crypto
         .createHmac('sha256', JWT_SECRET)
