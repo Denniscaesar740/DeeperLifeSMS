@@ -4,6 +4,7 @@ import { AdmissionModel } from '../models/Admission.js';
 import { StudentModel } from '../models/Student.js';
 import { BranchModel } from '../models/Branch.js';
 import { FeeInvoiceModel } from '../models/FeeInvoice.js';
+import { FeeStructureModel } from '../models/FeeStructure.js';
 import { UserModel } from '../models/User.js';
 import { hashPassword } from '../utils/security.js';
 import { uploadPassportToCloudinary } from '../lib/cloudinary.js';
@@ -22,6 +23,7 @@ function fmt(doc: any) {
         dateSubmitted: obj.submittedAt ? new Date(obj.submittedAt).toISOString().split('T')[0] : (obj.createdAt ? new Date(obj.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
     };
 }
+
 
 // GET /api/v1/admissions - List all admission applications
 admissionsRouter.get('/', authenticateToken, async (req: Request, res: Response) => {
@@ -200,21 +202,70 @@ const handleApprove = async (req: Request, res: Response) => {
         const studentObj = typeof (studentDoc as any).toObject === 'function' ? (studentDoc as any).toObject() : studentDoc;
         const studentIdStr = studentObj._id?.toString() || generatedAdmissionNo;
 
-        // Auto-generate initial Term Fee Invoice for newly enrolled student
+        // Auto-generate Term Fee Invoice using dynamic fee structure configured by Admin/Accountant in DB
         try {
             const invoiceNo = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
             const existingInvoice = await FeeInvoiceModel.findOne({ studentId: studentIdStr }).lean();
             if (!existingInvoice) {
+                let items: any[] = [];
+                let totalBilled = 1800;
+
+                // 1. Query database for user-configured Fee Structure for this level
+                const configuredStructure = await FeeStructureModel.findOne({
+                    $or: [{ level }, { level: new RegExp(`^${level}$`, 'i') }],
+                    status: 'ACTIVE'
+                }).lean();
+
+                if (configuredStructure && configuredStructure.totalAmountGHS > 0) {
+                    totalBilled = configuredStructure.totalAmountGHS;
+                    items = (configuredStructure.items || []).map((i: any) => ({
+                        description: i.name || i.description,
+                        amountGHS: i.amountGHS,
+                    }));
+                } else {
+                    // Fallback template if admin has not saved a custom fee structure for this level yet
+                    const lvlLower = (level || '').toLowerCase();
+                    if (lvlLower.includes('creche') || lvlLower.includes('nursery') || lvlLower.includes('kindergarten') || lvlLower.includes('kg')) {
+                        totalBilled = 1600;
+                        items = [
+                            { description: 'One-Time Admission & Desk Fee', amountGHS: 300 },
+                            { description: 'Termly Early Childhood Tuition & Care', amountGHS: 900 },
+                            { description: 'Feeding & Daily Health Care Levy', amountGHS: 300 },
+                            { description: 'PTA & Institutional Facility Levy', amountGHS: 100 },
+                        ];
+                    } else if (lvlLower.includes('jhs') || lvlLower.includes('junior high') || lvlLower.includes('form')) {
+                        totalBilled = 2400;
+                        items = [
+                            { description: 'One-Time Admission & Enrolment Fee', amountGHS: 400 },
+                            { description: 'Termly JHS Academic Tuition', amountGHS: 1500 },
+                            { description: 'BECE Science & ICT Lab Practical Access', amountGHS: 250 },
+                            { description: 'E-Learning Portal & Library Access Levy', amountGHS: 150 },
+                            { description: 'PTA & Institutional Facility Levy', amountGHS: 100 },
+                        ];
+                    } else {
+                        totalBilled = 1800;
+                        items = [
+                            { description: 'One-Time Admission & Enrolment Fee', amountGHS: 350 },
+                            { description: 'Termly Primary Tuition Fee', amountGHS: 1200 },
+                            { description: 'ICT Computer Lab & Coding Fee', amountGHS: 150 },
+                            { description: 'Science Practical & Learning Materials', amountGHS: 100 },
+                            { description: 'PTA & Institutional Facility Levy', amountGHS: 100 },
+                        ];
+                    }
+                }
+
                 await FeeInvoiceModel.create({
                     invoiceNo,
                     studentId: studentIdStr,
                     studentName: applicantName,
+                    level,
                     branchId,
                     term: 'Term 3',
                     academicYear: '2025/2026',
-                    billedAmountGHS: 1200,
+                    items,
+                    billedAmountGHS: totalBilled,
                     paidAmountGHS: 0,
-                    balanceGHS: 1200,
+                    balanceGHS: totalBilled,
                     status: 'UNPAID',
                     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
                 });

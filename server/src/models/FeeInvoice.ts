@@ -1,12 +1,19 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface IFeeItem {
+    description: string;
+    amountGHS: number;
+}
+
 export interface IFeeInvoice extends Document {
     invoiceNo: string;
     studentId: string;
     studentName?: string;
+    level?: string;
     branchId: string;
     term: string;
     academicYear: string;
+    items?: IFeeItem[];
     billedAmountGHS: number;
     paidAmountGHS: number;
     balanceGHS: number;
@@ -19,9 +26,16 @@ const FeeInvoiceSchema: Schema = new Schema(
         invoiceNo: { type: String, required: true, unique: true },
         studentId: { type: String, required: true },
         studentName: { type: String, default: '' },
+        level: { type: String, default: 'Primary 1' },
         branchId: { type: String, required: true },
         term: { type: String, default: 'Term 3' },
-        academicYear: { type: String, default: '2026' },
+        academicYear: { type: String, default: '2025/2026' },
+        items: [
+            {
+                description: { type: String, required: true },
+                amountGHS: { type: Number, required: true },
+            }
+        ],
         billedAmountGHS: { type: Number, required: true },
         paidAmountGHS: { type: Number, default: 0 },
         balanceGHS: { type: Number, required: true },
@@ -32,3 +46,4 @@ const FeeInvoiceSchema: Schema = new Schema(
 );
 
 export const FeeInvoiceModel = mongoose.models.FeeInvoice || mongoose.model<IFeeInvoice>('FeeInvoice', FeeInvoiceSchema);
+
