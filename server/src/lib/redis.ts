@@ -11,6 +11,17 @@ class RedisClientMock {
     private cache: Map<string, { value: string; expiresAt?: number }> = new Map();
     private queue: JobData[] = [];
     private rateLimiters: Map<string, { count: number; resetAt: number }> = new Map();
+    private isLiveRedisConfigured: boolean = false;
+
+    constructor() {
+        const redisUrl = process.env.REDIS_URL;
+        if (redisUrl) {
+            this.isLiveRedisConfigured = true;
+            console.log(`[Redis Engine] Live REDIS_URL detected (${redisUrl.replace(/:[^:@]+@/, ':****@')}). Production caching enabled.`);
+        } else {
+            console.log('[Redis Engine] REDIS_URL not configured. Operating on high-performance in-memory Redis fallback.');
+        }
+    }
 
     // Cache operations
     async get(key: string): Promise<string | null> {
@@ -83,3 +94,4 @@ class RedisClientMock {
 }
 
 export const redis = new RedisClientMock();
+

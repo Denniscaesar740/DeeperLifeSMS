@@ -15,6 +15,9 @@ import { communicationRouter } from './routes/communication.routes.js';
 import { bulkdataRouter } from './routes/bulkdata.routes.js';
 import { auditRouter } from './routes/audit.routes.js';
 import { uploadRouter } from './routes/upload.routes.js';
+import { operationsRouter } from './routes/operations.routes.js';
+import { attendanceRouter } from './routes/attendance.routes.js';
+import { passwordResetRouter } from './routes/password-reset.routes.js';
 import { rateLimiter } from './middleware/auth.js';
 
 const app = express();
@@ -136,6 +139,7 @@ app.get('/health', (_req: Request, res: Response) => {
             'Communication Broadcast Hub (SMS / Email / WhatsApp)',
             'Bulk Data Import / Export Engine',
             'Audit & Governance',
+            'Operations Hub (Library, Transport, Clinic, Gate Security)',
         ],
     });
 });
@@ -156,6 +160,9 @@ const routes = [
     { prefix: 'bulk-data', router: bulkdataRouter },
     { prefix: 'audit', router: auditRouter },
     { prefix: 'upload', router: uploadRouter },
+    { prefix: 'operations', router: operationsRouter },
+    { prefix: 'attendance', router: attendanceRouter },
+    { prefix: 'auth', router: passwordResetRouter },
 ];
 
 for (const { prefix, router } of routes) {
