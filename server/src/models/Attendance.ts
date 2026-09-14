@@ -22,7 +22,7 @@ const AttendanceSchema: Schema = new Schema(
         classStream: { type: String, default: '' },
         branchId: { type: String, default: '' },
         date: { type: String, required: true },
-        status: { type: String, enum: ['PRESENT', 'LATE', 'ABSENT'], required: true },
+        status: { type: String, enum: ['PRESENT', 'LATE', 'ABSENT', 'EXCUSED'], required: true },
         markedBy: { type: String, default: '' },
         parentNotified: { type: Boolean, default: false },
         notificationMethod: { type: String, default: '' },

@@ -17,6 +17,7 @@ import { auditRouter } from './routes/audit.routes.js';
 import { uploadRouter } from './routes/upload.routes.js';
 import { operationsRouter } from './routes/operations.routes.js';
 import { attendanceRouter } from './routes/attendance.routes.js';
+import { studentLeaveRouter } from './routes/studentLeave.routes.js';
 import { passwordResetRouter } from './routes/password-reset.routes.js';
 import { rateLimiter } from './middleware/auth.js';
 
@@ -162,6 +163,7 @@ const routes = [
     { prefix: 'upload', router: uploadRouter },
     { prefix: 'operations', router: operationsRouter },
     { prefix: 'attendance', router: attendanceRouter },
+    { prefix: 'student-leaves', router: studentLeaveRouter },
     { prefix: 'auth', router: passwordResetRouter },
 ];
 
