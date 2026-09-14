@@ -2,6 +2,9 @@ import { Router, Request, Response } from 'express';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 import { StaffModel } from '../models/Staff.js';
 import { PayrollModel } from '../models/Payroll.js';
+import { StaffLeaveModel } from '../models/StaffLeave.js';
+import { StaffAttendanceModel } from '../models/StaffAttendance.js';
+import { StaffAppraisalModel } from '../models/StaffAppraisal.js';
 
 export const hrRouter = Router();
 
@@ -236,6 +239,382 @@ hrRouter.post('/payroll/run', authenticateToken, authorizeRoles('SUPER_ADMIN', '
             totalNetPayoutGHS: totalNetPayout.toFixed(2),
             payrollSummary,
         });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// STAFF LEAVE REQUEST & MANAGEMENT
+// ═══════════════════════════════════════════════════════════════════
+
+// GET /api/v1/hr/leave — List leave requests (filter by status, staffId, branchId)
+hrRouter.get('/leave', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const filter: any = {};
+        if (req.query.status) filter.status = req.query.status;
+        if (req.query.staffId) filter.staffId = req.query.staffId;
+        if (req.query.branchId && req.query.branchId !== 'ALL') filter.branchId = req.query.branchId;
+        if (req.query.leaveType) filter.leaveType = req.query.leaveType;
+
+        const leaves = await StaffLeaveModel.find(filter).sort({ createdAt: -1 }).limit(500).lean();
+        const formatted = leaves.map((d: any) => ({ ...d, id: d._id?.toString() }));
+        return res.json({ count: formatted.length, leaveRequests: formatted });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// POST /api/v1/hr/leave — Create a new leave request
+hrRouter.post('/leave', authenticateToken, async (req: Request, res: Response) => {
+    const { staffId, staffName, staffNo, department, branchId, branchName, leaveType, startDate, endDate, totalDays, reason, contactDuringLeave, reliefStaffName } = req.body;
+
+    if (!staffId || !staffName || !leaveType || !startDate || !endDate) {
+        return res.status(400).json({ error: 'BAD_REQUEST', message: 'staffId, staffName, leaveType, startDate, and endDate are required.' });
+    }
+
+    try {
+        const leaveNo = `LV-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const days = totalDays || Math.max(1, Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+        const created = await StaffLeaveModel.create({
+            leaveNo,
+            staffId,
+            staffName,
+            staffNo: staffNo || '',
+            department: department || '',
+            branchId: branchId || '',
+            branchName: branchName || '',
+            leaveType,
+            startDate,
+            endDate,
+            totalDays: days,
+            reason: reason || '',
+            contactDuringLeave: contactDuringLeave || '',
+            reliefStaffName: reliefStaffName || '',
+            status: 'PENDING',
+            dateSubmitted: new Date().toISOString().split('T')[0],
+        });
+
+        return res.status(201).json({
+            message: 'Leave request submitted successfully.',
+            leaveRequest: { ...created.toObject(), id: created._id?.toString() },
+        });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// PATCH /api/v1/hr/leave/:id/approve — Approve or reject a leave request
+hrRouter.patch('/leave/:id/approve', authenticateToken, authorizeRoles('SUPER_ADMIN', 'BRANCH_ADMIN', 'HEADTEACHER', 'HR_MANAGER'), async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const { action, comment, approvedBy } = req.body; // action: 'APPROVE' | 'REJECT'
+
+    if (!action || !['APPROVE', 'REJECT'].includes(action)) {
+        return res.status(400).json({ error: 'BAD_REQUEST', message: 'action must be APPROVE or REJECT.' });
+    }
+
+    try {
+        const leave = await StaffLeaveModel.findById(id);
+        if (!leave) {
+            return res.status(404).json({ error: 'NOT_FOUND', message: 'Leave request not found.' });
+        }
+
+        leave.status = action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+        leave.approvedBy = approvedBy || (req as any).user?.fullName || 'Admin';
+        leave.approverComment = comment || '';
+        leave.approvedDate = new Date().toISOString().split('T')[0];
+        await leave.save();
+
+        // If approved, update staff status to ON_LEAVE
+        if (action === 'APPROVE' && leave.staffId) {
+            await StaffModel.findByIdAndUpdate(leave.staffId, { status: 'ON_LEAVE' }).catch(() => { });
+        }
+
+        return res.json({
+            message: `Leave request ${action === 'APPROVE' ? 'approved' : 'rejected'} successfully.`,
+            leaveRequest: { ...leave.toObject(), id: leave._id?.toString() },
+        });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// DELETE /api/v1/hr/leave/:id — Cancel / delete a leave request
+hrRouter.delete('/leave/:id', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const deleted = await StaffLeaveModel.findByIdAndDelete(req.params.id);
+        if (!deleted) return res.status(404).json({ error: 'NOT_FOUND', message: 'Leave request not found.' });
+        return res.json({ message: 'Leave request cancelled and removed.' });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// STAFF ATTENDANCE TRACKING
+// ═══════════════════════════════════════════════════════════════════
+
+// GET /api/v1/hr/staff-attendance — List staff attendance records
+hrRouter.get('/staff-attendance', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const filter: any = {};
+        if (req.query.date) filter.date = req.query.date;
+        if (req.query.staffId) filter.staffId = req.query.staffId;
+        if (req.query.branchId && req.query.branchId !== 'ALL') filter.branchId = req.query.branchId;
+        if (req.query.status) filter.status = req.query.status;
+
+        const records = await StaffAttendanceModel.find(filter).sort({ createdAt: -1 }).limit(500).lean();
+        const formatted = records.map((d: any) => ({ ...d, id: d._id?.toString() }));
+        return res.json({ count: formatted.length, records: formatted });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// POST /api/v1/hr/staff-attendance/bulk — Bulk mark staff attendance for a day
+hrRouter.post('/staff-attendance/bulk', authenticateToken, authorizeRoles('SUPER_ADMIN', 'BRANCH_ADMIN', 'HEADTEACHER', 'HR_MANAGER'), async (req: Request, res: Response) => {
+    const { date, records, markedBy } = req.body;
+    if (!date || !Array.isArray(records) || records.length === 0) {
+        return res.status(400).json({ error: 'BAD_REQUEST', message: 'date and records[] are required.' });
+    }
+
+    try {
+        const ops = records.map((r: any) => ({
+            updateOne: {
+                filter: { staffId: r.staffId, date },
+                update: {
+                    $set: {
+                        staffName: r.staffName || '',
+                        staffNo: r.staffNo || '',
+                        department: r.department || '',
+                        branchId: r.branchId || '',
+                        branchName: r.branchName || '',
+                        clockInTime: r.clockInTime || '',
+                        clockOutTime: r.clockOutTime || '',
+                        status: r.status || 'PRESENT',
+                        hoursWorked: r.hoursWorked || 0,
+                        markedBy: markedBy || 'Admin',
+                        remarks: r.remarks || '',
+                    },
+                },
+                upsert: true,
+            },
+        }));
+
+        const result = await StaffAttendanceModel.bulkWrite(ops);
+        const present = records.filter((r: any) => r.status === 'PRESENT').length;
+        const late = records.filter((r: any) => r.status === 'LATE').length;
+        const absent = records.filter((r: any) => r.status === 'ABSENT').length;
+        const onLeave = records.filter((r: any) => r.status === 'ON_LEAVE').length;
+
+        return res.json({
+            message: `Staff attendance marked for ${date}. ${records.length} staff recorded.`,
+            totalMarked: records.length,
+            present,
+            late,
+            absent,
+            onLeave,
+            upserted: result.upsertedCount,
+            modified: result.modifiedCount,
+        });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// POST /api/v1/hr/staff-attendance/clock-in — Individual staff clock-in
+hrRouter.post('/staff-attendance/clock-in', authenticateToken, async (req: Request, res: Response) => {
+    const { staffId, staffName, staffNo, department, branchId, branchName } = req.body;
+    if (!staffId || !staffName) {
+        return res.status(400).json({ error: 'BAD_REQUEST', message: 'staffId and staffName are required.' });
+    }
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        const expectedTime = '07:30';
+        const isLate = now > '08:00';
+
+        const record = await StaffAttendanceModel.findOneAndUpdate(
+            { staffId, date: today },
+            {
+                $set: {
+                    staffName,
+                    staffNo: staffNo || '',
+                    department: department || '',
+                    branchId: branchId || '',
+                    branchName: branchName || '',
+                    clockInTime: now,
+                    status: isLate ? 'LATE' : 'PRESENT',
+                    markedBy: 'SELF',
+                },
+            },
+            { upsert: true, new: true }
+        );
+
+        return res.json({
+            message: `Clock-in recorded at ${now}${isLate ? ' (LATE)' : ''}.`,
+            record: { ...record.toObject(), id: record._id?.toString() },
+        });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// POST /api/v1/hr/staff-attendance/clock-out — Individual staff clock-out
+hrRouter.post('/staff-attendance/clock-out', authenticateToken, async (req: Request, res: Response) => {
+    const { staffId } = req.body;
+    if (!staffId) {
+        return res.status(400).json({ error: 'BAD_REQUEST', message: 'staffId is required.' });
+    }
+
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+        const record = await StaffAttendanceModel.findOne({ staffId, date: today });
+        if (!record) {
+            return res.status(404).json({ error: 'NOT_FOUND', message: 'No clock-in record found for today. Please clock in first.' });
+        }
+
+        // Calculate hours worked
+        let hoursWorked = 0;
+        if (record.clockInTime) {
+            const [inH, inM] = record.clockInTime.split(':').map(Number);
+            const [outH, outM] = now.split(':').map(Number);
+            hoursWorked = Math.max(0, Number(((outH * 60 + outM - inH * 60 - inM) / 60).toFixed(1)));
+        }
+
+        record.clockOutTime = now;
+        record.hoursWorked = hoursWorked;
+        if (hoursWorked > 0 && hoursWorked < 4) {
+            record.status = 'HALF_DAY';
+        }
+        await record.save();
+
+        return res.json({
+            message: `Clock-out recorded at ${now}. Hours worked: ${hoursWorked}h.`,
+            record: { ...record.toObject(), id: record._id?.toString() },
+        });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// GET /api/v1/hr/staff-attendance/summary — Attendance statistics for a date
+hrRouter.get('/staff-attendance/summary', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
+        const filter: any = { date };
+        if (req.query.branchId && req.query.branchId !== 'ALL') filter.branchId = req.query.branchId;
+
+        const records = await StaffAttendanceModel.find(filter).lean();
+        const totalStaff = await StaffModel.countDocuments({ status: { $in: ['ACTIVE', 'ON_LEAVE'] } });
+        const present = records.filter(r => r.status === 'PRESENT').length;
+        const late = records.filter(r => r.status === 'LATE').length;
+        const absent = totalStaff - records.length;
+        const onLeave = records.filter(r => r.status === 'ON_LEAVE').length;
+        const halfDay = records.filter(r => r.status === 'HALF_DAY').length;
+        const avgHours = records.length > 0 ? Number((records.reduce((a, r) => a + (r.hoursWorked || 0), 0) / records.length).toFixed(1)) : 0;
+
+        return res.json({
+            date,
+            totalStaff,
+            recorded: records.length,
+            present,
+            late,
+            absent: Math.max(0, absent),
+            onLeave,
+            halfDay,
+            attendanceRate: totalStaff ? (((present + late) / totalStaff) * 100).toFixed(1) : '0',
+            avgHoursWorked: avgHours,
+        });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// STAFF PERFORMANCE APPRAISALS
+// ═══════════════════════════════════════════════════════════════════
+
+// GET /api/v1/hr/appraisals — List appraisals
+hrRouter.get('/appraisals', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const filter: any = {};
+        if (req.query.staffId) filter.staffId = req.query.staffId;
+        if (req.query.status) filter.status = req.query.status;
+        if (req.query.branchId && req.query.branchId !== 'ALL') filter.branchId = req.query.branchId;
+        if (req.query.reviewPeriod) filter.reviewPeriod = req.query.reviewPeriod;
+
+        const appraisals = await StaffAppraisalModel.find(filter).sort({ createdAt: -1 }).limit(200).lean();
+        const formatted = appraisals.map((d: any) => ({ ...d, id: d._id?.toString() }));
+        return res.json({ count: formatted.length, appraisals: formatted });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// POST /api/v1/hr/appraisals — Create / Submit an appraisal
+hrRouter.post('/appraisals', authenticateToken, authorizeRoles('SUPER_ADMIN', 'BRANCH_ADMIN', 'HEADTEACHER', 'HR_MANAGER'), async (req: Request, res: Response) => {
+    const {
+        staffId, staffName, staffNo, jobTitle, department, branchId, branchName,
+        reviewPeriod, evaluatorName, evaluatorRole,
+        teachingScore, punctualityScore, teamworkScore, professionalDevelopmentScore, studentEngagementScore,
+        overallRating, keyAchievements, areasForImprovement, developmentPlan, staffComments, status
+    } = req.body;
+
+    if (!staffId || !staffName || !reviewPeriod || !evaluatorName) {
+        return res.status(400).json({ error: 'BAD_REQUEST', message: 'staffId, staffName, reviewPeriod, and evaluatorName are required.' });
+    }
+
+    try {
+        const appraisalNo = `APR-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+
+        const created = await StaffAppraisalModel.create({
+            appraisalNo,
+            staffId,
+            staffName,
+            staffNo: staffNo || '',
+            jobTitle: jobTitle || '',
+            department: department || '',
+            branchId: branchId || '',
+            branchName: branchName || '',
+            reviewPeriod,
+            evaluatorName,
+            evaluatorRole: evaluatorRole || '',
+            teachingScore: teachingScore || 3,
+            punctualityScore: punctualityScore || 3,
+            teamworkScore: teamworkScore || 3,
+            professionalDevelopmentScore: professionalDevelopmentScore || 3,
+            studentEngagementScore: studentEngagementScore || 3,
+            overallRating: overallRating || 'SATISFACTORY',
+            keyAchievements: keyAchievements || '',
+            areasForImprovement: areasForImprovement || '',
+            developmentPlan: developmentPlan || '',
+            staffComments: staffComments || '',
+            status: status || 'SUBMITTED',
+            dateEvaluated: new Date().toISOString().split('T')[0],
+        });
+
+        return res.status(201).json({
+            message: 'Appraisal submitted successfully.',
+            appraisal: { ...created.toObject(), id: created._id?.toString() },
+        });
+    } catch (err: any) {
+        return res.status(500).json({ error: 'DB_ERROR', message: err.message });
+    }
+});
+
+// PATCH /api/v1/hr/appraisals/:id — Update appraisal status (acknowledge, approve)
+hrRouter.patch('/appraisals/:id', authenticateToken, async (req: Request, res: Response) => {
+    try {
+        const updated = await StaffAppraisalModel.findByIdAndUpdate(req.params.id, req.body, { new: true }).lean();
+        if (!updated) return res.status(404).json({ error: 'NOT_FOUND', message: 'Appraisal not found.' });
+        return res.json({ message: 'Appraisal updated.', appraisal: { ...updated, id: (updated as any)._id?.toString() } });
     } catch (err: any) {
         return res.status(500).json({ error: 'DB_ERROR', message: err.message });
     }
